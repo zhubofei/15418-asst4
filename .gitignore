@@ -1,0 +1,8 @@
+logs/
+logs*/
+latedays.qsub.*
+master
+worker
+deps/
+objs/
+*.pyc
