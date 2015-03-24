@@ -103,7 +103,7 @@ void handle_client_request(Client_handle client_handle, const Request_msg& clien
   // Save off the handle to the client that is expecting a response.
   // The master needs to do this it can response to this client later
   // when 'handle_worker_response' is called.
-  mstate.waiting_client.insert(std::make_pair<int, Client_handle>(tag, client_handle));
+  mstate.waiting_client.insert(std::make_pair(tag, client_handle));
   mstate.num_pending_client_requests++;
 
   // Fire off the request to the worker.  Eventually the worker will
