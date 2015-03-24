@@ -15,8 +15,8 @@
 WorkQueue<Request_msg> work_queue;
 
 // spawn a thread
-pthread_t thead0;
-pthread_t thead1;
+pthread_t thread0;
+pthread_t thread1;
 
 // Generate a valid 'countprimes' request dictionary from integer 'n'
 static void create_computeprimes_req(Request_msg& req, int n) {
