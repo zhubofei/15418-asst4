@@ -12,11 +12,9 @@
 #include "tools/cycle_timer.h"
 #include "tools/work_queue.h"
 
-WorkQueue<Request_msg> work_queue;
+#define MAX_THREADS_NUM 23
 
-// spawn a thread
-pthread_t thread0;
-pthread_t thread1;
+WorkQueue<Request_msg> work_queue;
 
 // Generate a valid 'countprimes' request dictionary from integer 'n'
 static void create_computeprimes_req(Request_msg& req, int n) {
@@ -55,7 +53,7 @@ static void execute_compareprimes(const Request_msg& req, Response_msg& resp) {
 }
 
 // For the use of pthread
-void *worker_thread(void *arg) {
+void* worker_thread(void* arg) {
    while (1) {
      Request_msg my_req = work_queue.get_work();
      Response_msg resp(my_req.get_tag());
@@ -73,6 +71,7 @@ void *worker_thread(void *arg) {
      }
      worker_send_response(resp);
    }
+   return NULL;
 }
 
 void worker_node_init(const Request_msg& params) {
@@ -85,8 +84,10 @@ void worker_node_init(const Request_msg& params) {
   DLOG(INFO) << "**** Initializing worker: " << params.get_arg("name") << " ****\n";
 
   // One thread here as the master thread
-  pthread_create(&thread0, NULL, &worker_thread, NULL);
-  pthread_create(&thread1, NULL, &worker_thread, NULL);
+  for (int i=0; i<MAX_THREADS_NUM; i++) {
+    pthread_t t;
+    pthread_create(&t, NULL, &worker_thread, NULL);
+  }
 
 }
 
