@@ -1,10 +1,12 @@
 #include <glog/logging.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <queue>
+#include <unordered_map>
 
 #include "server/messages.h"
 #include "server/master.h"
+
+typedef std::unordered_map<int, Client_handle> Client_handle_map;
 
 
 static struct Master_state {
@@ -20,7 +22,7 @@ static struct Master_state {
   int next_tag;
 
   Worker_handle my_worker;
-  std::queue<Client_handle> waiting_client;
+  Client_handle_map waiting_client;
 } mstate;
 
 
@@ -73,9 +75,9 @@ void handle_worker_response(Worker_handle worker_handle, const Response_msg& res
 
   DLOG(INFO) << "Master received a response from a worker: [" << resp.get_tag() << ":" << resp.get_response() << "]" << std::endl;
 
-  send_client_response(mstate.waiting_client.front(), resp);
+  std::unordered_map<int, Client_handle>::const_iterator got = mstate.waiting_client.find(resp.get_tag());
 
-  mstate.waiting_client.pop();
+  send_client_response(got->second, resp);
 
   mstate.num_pending_client_requests--;
 }
@@ -94,23 +96,24 @@ void handle_client_request(Client_handle client_handle, const Request_msg& clien
     return;
   }
 
+  // New tag
+  int tag = mstate.next_tag++;
+
   // Save off the handle to the client that is expecting a response.
   // The master needs to do this it can response to this client later
   // when 'handle_worker_response' is called.
-  mstate.waiting_client.push(client_handle);
+  mstate.waiting_client.insert(std::make_pair<int, Client_handle>(tag, client_handle));
   mstate.num_pending_client_requests++;
 
   // Fire off the request to the worker.  Eventually the worker will
   // respond, and your 'handle_worker_response' event handler will be
   // called to forward the worker's response back to the server.
-  int tag = mstate.next_tag++;
   Request_msg worker_req(tag, client_req);
   send_request_to_worker(mstate.my_worker, worker_req);
 
   // We're done!  This event handler now returns, and the master
   // process calls another one of your handlers when action is
   // required.
-
 }
 
 
