@@ -20,7 +20,7 @@ static struct Master_state {
 
   Worker_handle my_worker;
   std::map<int, Request_msg> request_msgs;
-  std::unordered_map<int, Client_handle> waiting_client;
+  std::unordered_map<int, Client_handle> waiting_clients;
   std::unordered_map<std::string, Response_msg> cached_responses;
 } mstate;
 
@@ -74,13 +74,13 @@ void handle_worker_response(Worker_handle worker_handle, const Response_msg& res
 
   DLOG(INFO) << "Master received a response from a worker: [" << resp.get_tag() << ":" << resp.get_response() << "]" << std::endl;
 
-  send_client_response(mstate.waiting_client[resp.get_tag()], resp);
+  send_client_response(mstate.waiting_clients[resp.get_tag()], resp);
 
   // cache
-  mstate.cached_responses[mstate.request_strings[resp.get_tag()].get_request_string()] = resp;
+  mstate.cached_responses[mstate.request_msgs[resp.get_tag()].get_request_string()] = resp;
 
   // delete
-  mstate.request_strings.erase(resp.get_tag());
+  mstate.request_msgs.erase(resp.get_tag());
   mstate.waiting_clients.erase(mstate.waiting_clients.find(resp.get_tag()));
 
   mstate.num_pending_client_requests--;
@@ -111,7 +111,7 @@ void handle_client_request(Client_handle client_handle, const Request_msg& clien
     // Save off the handle to the client that is expecting a response.
     // The master needs to do this it can response to this client later
     // when 'handle_worker_response' is called.
-    mstate.waiting_client[tag] = client_handle;
+    mstate.waiting_clients[tag] = client_handle;
     mstate.request_msgs[tag] = client_req;
     mstate.num_pending_client_requests++;
 
