@@ -73,7 +73,9 @@ void handle_worker_response(Worker_handle worker_handle, const Response_msg& res
 
   DLOG(INFO) << "Master received a response from a worker: [" << resp.get_tag() << ":" << resp.get_response() << "]" << std::endl;
 
-  send_client_response(mstate.waiting_client.pop(), resp);
+  send_client_response(mstate.waiting_client.front(), resp);
+
+  mstate.waiting_client.pop();
 
   mstate.num_pending_client_requests--;
 }
