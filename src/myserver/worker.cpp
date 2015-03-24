@@ -12,7 +12,7 @@
 #include "tools/cycle_timer.h"
 #include "tools/work_queue.h"
 
-#define MAX_THREADS_NUM 23
+#define MAX_THREADS_NUM 22
 
 WorkQueue<Request_msg> work_queue;
 
