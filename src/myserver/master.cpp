@@ -4,6 +4,7 @@
 #include <unordered_map>
 #include <sstream>
 #include <queue>
+#include <iterator>
 
 #include "server/messages.h"
 #include "server/master.h"
