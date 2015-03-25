@@ -190,8 +190,6 @@ void handle_client_request(Client_handle client_handle, const Request_msg& clien
         mstate.compareprimes_requests[tag] = crequest;
         // send request
         assign_request(dummy_req);
-        // increase num of pennding request
-        mstate.num_pending_client_requests++;
       }
     }
 
@@ -236,10 +234,30 @@ void handle_client_request(Client_handle client_handle, const Request_msg& clien
   // required.
 }
 
+int count_idle_threads() {
+  int count = 0;
+  for (auto& w: mstate.my_workers) {
+    if (w.second < MAX_THREADS) {
+      count += MAX_THREADS - w.second;
+    }
+  }
+  return count;
+}
+
+int count_avalible_queue() {
+  int count = 0;
+  for (auto& w: mstate.my_workers) {
+    if (w.second < MAX_REQUESTS) {
+      count += MAX_REQUESTS - w.second;
+    }
+  }
+  return count;
+}
+
 void send_request_to_best_worker(const Request_msg& req) {
   int idle_count = count_idle_threads();
   if (idle_count > 0) { // there is a idle threads
-    Worker_handle woker_handle;
+    Worker_handle worker_handle;
     int t_num = 0;
     for (auto& w: mstate.my_workers) {
       if (w.second < MAX_THREADS && t_num < w.second) {
@@ -264,26 +282,6 @@ void send_request_to_best_worker(const Request_msg& req) {
     send_request_to_worker(worker_handle, req);
     mstate.my_workers[worker_handle]++;
   }
-}
-
-int count_idle_threads() {
-  int count = 0;
-  for (auto& w: mstate.my_workers) {
-    if (w.second < MAX_THREADS) {
-      count += MAX_THREADS - w.second;
-    }
-  }
-  return count;
-}
-
-int count_avalible_queue() {
-  int count = 0;
-  for (auto& w: mstate.my_workers) {
-    if (w.second < MAX_REQUESTS) {
-      count += MAX_REQUESTS - w.second;
-    }
-  }
-  return count;
 }
 
 void assign_request(const Request_msg& req) {
