@@ -257,7 +257,7 @@ int count_avalible_queue() {
 void send_request_to_best_worker(const Request_msg& req) {
   int idle_count = count_idle_threads();
   if (idle_count > 0) { // there is a idle threads
-    Worker_handle worker_handle;
+    Worker_handle worker_handle = mstate.my_workers.begin()->first;
     int t_num = 0;
     for (auto& w: mstate.my_workers) {
       if (w.second < MAX_THREADS && t_num < w.second) {
@@ -270,7 +270,7 @@ void send_request_to_best_worker(const Request_msg& req) {
     mstate.my_workers[worker_handle]++;
   } else { // there is no idle threads
     // send request to the least busy worker
-    Worker_handle worker_handle;
+    Worker_handle worker_handle = mstate.my_workers.begin()->first;
     int t_num = 999999; // big number
     for (auto& w: mstate.my_workers) {
       if (w.second < t_num) {
