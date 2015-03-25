@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unordered_map>
+#include <sstream>
 
 #include "server/messages.h"
 #include "server/master.h"
@@ -95,14 +96,14 @@ void handle_worker_response(Worker_handle worker_handle, const Response_msg& res
     // if dummy requests all finished, send respond
     if (crequest->finished_count == 4) {
       Response_msg new_resp(crequest->first_tag);
-
-      if (crequest->n[2] - crequest->n[1] > crequest->n[4] - crequest->n[3])
+      if (crequest->n[1] - crequest->n[0] > crequest->n[3] - crequest->n[2])
         new_resp.set_response("There are more primes in first range.");
       else
         new_resp.set_response("There are more primes in second range.");
 
       send_client_response(mstate.waiting_clients[crequest->first_tag], new_resp);
       mstate.waiting_clients.erase(crequest->first_tag);
+      delete crequest;
     }
     mstate.request_msg_strings.erase(resp.get_tag());
   } else {
@@ -156,13 +157,12 @@ void handle_client_request(Client_handle client_handle, const Request_msg& clien
       create_computeprimes_req(dummy_req, params[i]);
 
       // check cache
-      if (mstate.cached_responses.count(dummy_req.get_request_string())) {
+      if (false) {//mstate.cached_responses.count(dummy_req.get_request_string())) {
         Response_msg resp(tag);
         // update crequest
         resp.set_response(mstate.cached_responses[dummy_req.get_request_string()].get_response());
         crequest->finished_count++;
-        int index = tag - crequest->first_tag;
-        crequest->n[index] = atoi(resp.get_response().c_str());
+        crequest->n[i] = atoi(resp.get_response().c_str());
       } else {
         // save requst string to the map
         mstate.request_msg_strings[tag] = dummy_req.get_request_string();
@@ -176,10 +176,10 @@ void handle_client_request(Client_handle client_handle, const Request_msg& clien
     }
 
     // if all parts are completed, create response
-    if (crequest->finished_count == 4) {
+    if (false) {//crequest->finished_count == 4) {
       Response_msg resp(crequest->first_tag);
 
-      if (crequest->n[2] - crequest->n[1] > crequest->n[4] - crequest->n[3])
+      if (crequest->n[1] - crequest->n[0] > crequest->n[3] - crequest->n[2])
         resp.set_response("There are more primes in first range.");
       else
         resp.set_response("There are more primes in second range.");
