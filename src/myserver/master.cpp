@@ -9,7 +9,9 @@
 #include "server/messages.h"
 #include "server/master.h"
 
+#define MAX_REQUESTS 27
 #define MAX_THREADS 23
+#define MAX_QUEUE_LENGTH 25
 
 typedef struct {
   int first_tag;
@@ -25,11 +27,12 @@ static struct Master_state {
   // code.
   bool server_ready;
   int max_num_workers;
-  int num_pending_client_requests;
   int next_tag;
   int pending_worker_num;
 
+  // queue of holding requests
   std::queue<Request_msg> holding_requests;
+
   // count of pending requests
   std::unordered_map<Worker_handle, int> my_workers;
   std::unordered_map<int, std::string> request_msg_strings;
@@ -59,7 +62,6 @@ void master_node_init(int max_workers, int& tick_period) {
   mstate.next_tag = 0;
   mstate.pending_worker_num = 0;
   mstate.max_num_workers = max_workers;
-  mstate.num_pending_client_requests = 0;
 
   // don't mark the server as ready until the server is ready to go.
   // This is actually when the first worker is up and running, not
@@ -67,12 +69,10 @@ void master_node_init(int max_workers, int& tick_period) {
   mstate.server_ready = false;
 
   // fire off a request for a new worker
-
   int tag = random();
   Request_msg req(tag);
   req.set_arg("name", "my worker 0");
   request_new_worker_node(req);
-
   // increase number of pending worker
   mstate.pending_worker_num++;
 }
@@ -88,6 +88,12 @@ void handle_new_worker_online(Worker_handle worker_handle, int tag) {
   // register new worker
   mstate.my_workers[worker_handle] = 0;
 
+  // empty holding queue
+  while(mstat.holding_requests.size() > 0) {
+    send_request_to_worker(worker_handle, mstat.holding_requests.front());
+    mstat.holding_requests.pop();
+  }
+
   // Now that a worker is booted, let the system know the server is
   // ready to begin handling client requests.  The test harness will
   // now start its timers and start hitting your server with requests.
@@ -101,6 +107,7 @@ void handle_worker_response(Worker_handle worker_handle, const Response_msg& res
 
   // Master node has received a response from one of its workers.
   mstate.my_workers[worker_handle]--;
+
   if (mstate.compareprimes_requests.count(resp.get_tag())) {
     Crequest* crequest = mstate.compareprimes_requests[resp.get_tag()];
     crequest->finished_count++;
@@ -129,8 +136,6 @@ void handle_worker_response(Worker_handle worker_handle, const Response_msg& res
     mstate.request_msg_strings.erase(resp.get_tag());
     mstate.waiting_clients.erase(resp.get_tag());
   }
-  // always decrease pending request by one
-  mstate.num_pending_client_requests--;
 }
 
 void handle_client_request(Client_handle client_handle, const Request_msg& client_req) {
@@ -218,14 +223,12 @@ void handle_client_request(Client_handle client_handle, const Request_msg& clien
     // when 'handle_worker_response' is called.
     mstate.waiting_clients[tag] = client_handle;
     mstate.request_msg_strings[tag] = client_req.get_request_string();
-    mstate.num_pending_client_requests++;
 
     // Fire off the request to the worker.  Eventually the worker will
     // respond, and your 'handle_worker_response' event handler will be
     // called to forward the worker's response back to the server.
     Request_msg worker_req(tag, client_req);
     assign_request(worker_req);
-
   }
 
   // We're done!  This event handler now returns, and the master
@@ -233,22 +236,138 @@ void handle_client_request(Client_handle client_handle, const Request_msg& clien
   // required.
 }
 
+void send_request_to_best_worker(const Request_msg& req) {
+  int idle_count = count_idle_threads();
+  if (idle_count > 0) { // there is a idle threads
+    Worker_handle woker_handle;
+    int t_num = 0;
+    for (auto& w: mstate.my_workers) {
+      if (w.second < MAX_THREADS && t_num < w.second) {
+        // send request to the worker with least idle threads
+        worker_handle = w.first;
+        t_num = w.second;
+      }
+    }
+    send_request_to_worker(worker_handle, req);
+    mstate.my_workers[worker_handle]++;
+  } else { // there is no idle threads
+    // send request to the least busy worker
+    Worker_handle woker_handle;
+    int t_num = 999999; // big number
+    for (auto& w: mstate.my_workers) {
+      if (w.second < t_num) {
+        // send request to the worker with least idle threads
+        worker_handle = w.first;
+        t_num = w.second;
+      }
+    }
+    send_request_to_worker(worker_handle, req);
+    mstate.my_workers[worker_handle]++;
+  }
+}
+
+int count_idle_threads() {
+  int count = 0;
+  for (auto& w: mstate.my_workers) {
+    if (w.second < MAX_THREADS) {
+      count += MAX_THREADS - w.second;
+    }
+  }
+  return count;
+}
+
+int count_avalible_queue() {
+  int count = 0;
+  for (auto& w: mstate.my_workers) {
+    if (w.second < MAX_REQUESTS) {
+      count += MAX_REQUESTS - w.second;
+    }
+  }
+  return count;
+}
+
 void assign_request(const Request_msg& req) {
-  auto w = mstate.my_workers.begin();
-  send_request_to_worker(w->first, req);
-  w->second++;
-  /*for (auto& w: mstate.my_workers) {
-    send_request_to_worker(w.first, req);
-    w.second++;
-    break;
-  }*/
+  if (req.get_arg("cmd") == "tellmenow") { // fire instantly
+    auto w = mstate.my_workers.begin();
+    send_request_to_worker(w->first, req);
+    w->second++;
+  } else {
+    // if workers' number is at max
+    if (mstat.my_workers.size() == mstat.max_num_workers) {
+      // fire request
+      send_request_to_best_worker(req);
+    } else {
+      // decide whether to queue or fire
+      int idle_count = count_idle_threads();
+      // have avalible workers
+      if (idle_count > 0) {
+        // check if there is request in the holding queue
+        if (mstat.holding_requests.size() > 0) {
+          // push the request into the back of the queue
+          mstat.holding_requests.push(req);
+          while(idle_count > 0 && mstat.holding_requests.size() > 0) {
+            // send queued reqs
+            send_request_to_best_worker(mstat.holding_requests.front());
+            mstat.holding_requests.pop();
+            idle_count--;
+          }
+        } else {
+          // fire instantly
+          send_request_to_best_worker(req);
+        }
+      } else {
+        // !!!!! if overload too much should allow init more than one worker
+        // fire off a request for a new worker
+        if (mstat.pending_worker_num == 0) { // init a new worker
+          int tag = random();
+          Request_msg req(tag);
+          req.set_arg("name", "my worker 0");
+          request_new_worker_node(req);
+          // increase number of pending worker
+          mstate.pending_worker_num++;
+        }
+
+        int avalible_queue = count_avalible_queue();
+        if (avalible_queue > 0) {
+          // check if there is request in the holding queue
+          if (mstat.holding_requests.size() > 0) {
+            // push the request into the back of the queue
+            mstat.holding_requests.push(req);
+            while(avalible_queue > 0 && mstat.holding_requests.size() > 0) {
+              // send queued reqs
+              send_request_to_best_worker(mstat.holding_requests.front());
+              mstat.holding_requests.pop();
+              avalible_queue--;
+            }
+          } else {
+            // fire instantly
+            send_request_to_best_worker(req);
+          }
+        } else { // workers are all overload
+          mstat.holding_requests.push(req); // cache the request in queue
+          if (mstat.holding_requests.size() > MAX_QUEUE_LENGTH) {
+            // queue too long
+            send_request_to_best_worker(mstat.holding_requests.front());
+            mstat.holding_requests.pop();
+          }
+        }
+      }
+    }
+  }
 }
 
 
 void handle_tick() {
 
-  // TODO: you may wish to take action here.  This method is called at
-  // fixed time intervals, according to how you set 'tick_period' in
-  // 'master_node_init'.
+  // This method is called at fixed time intervals,
+  // according to how you set 'tick_period' in 'master_node_init'.
 
+  // kill idle workers
+  if (mstat.my_workers.size() > 1) {
+    for (auto& w: mstate.my_workers) {
+      if (w.second == 0) {
+        kill_worker_node(w.first);
+      }
+    }
+  }
 }
