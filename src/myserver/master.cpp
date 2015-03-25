@@ -88,7 +88,7 @@ void handle_worker_response(Worker_handle worker_handle, const Response_msg& res
   if (mstate.compareprimes_requests.count(resp.get_tag())) {
     Crequest* crequest = mstate.compareprimes_requests[resp.get_tag()];
     crequest->finished_count++;
-    crequest->n[resp.get_tag() - crequest.first_tag] = atoi(resp.get_response().c_str());
+    crequest->n[resp.get_tag() - crequest->first_tag] = atoi(resp.get_response().c_str());
     mstate.compareprimes_requests.erase(resp.get_tag());
     mstate.cached_responses[mstate.request_msg_strings[resp.get_tag()]] = resp;
 
@@ -104,14 +104,13 @@ void handle_worker_response(Worker_handle worker_handle, const Response_msg& res
       send_client_response(mstate.waiting_clients[crequest->first_tag], new_resp);
       mstate.waiting_clients.erase(crequest->first_tag);
     }
-    
-    mstate.request_msgs_strings.erase(resp.get_tag());
+    mstate.request_msg_strings.erase(resp.get_tag());
   } else {
     send_client_response(mstate.waiting_clients[resp.get_tag()], resp);
     // cache
     mstate.cached_responses[mstate.request_msg_strings[resp.get_tag()]] = resp;
     // delete
-    mstate.request_msgs_strings.erase(resp.get_tag());
+    mstate.request_msg_strings.erase(resp.get_tag());
     mstate.waiting_clients.erase(resp.get_tag());
   }
   // always decrease pending request by one
