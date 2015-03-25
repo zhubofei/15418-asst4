@@ -184,7 +184,7 @@ void handle_client_request(Client_handle client_handle, const Request_msg& clien
         // save request to the map
         mstate.compareprimes_requests[tag] = crequest;
         // send request
-        send_request_to_worker(mstate.my_worker, dummy_req);
+        send_request_to_worker(mstate.my_worker[0].worker_handle, dummy_req);
         // increase num of pennding request
         mstate.num_pending_client_requests++;
       }
