@@ -7,11 +7,16 @@
 #include "server/messages.h"
 #include "server/master.h"
 
-typedef struct Compareprimes_request {
-    int first_tag;
-    int finished_count;
-    int n[4];
+typedef struct {
+  int first_tag;
+  int finished_count;
+  int n[4];
 } Crequest;
+
+typedef struct {
+  Worker_handle worker_handle;
+  int request_count;
+} Wstate;
 
 static struct Master_state {
 
@@ -23,9 +28,10 @@ static struct Master_state {
   int max_num_workers;
   int num_pending_client_requests;
   int next_tag;
-
-  Worker_handle my_worker;
-  std::map<int, std::string> request_msg_strings;
+  int active_worker_num;
+  int pending_worker_num;
+  Wstate my_workers[4];
+  std::unordered_map<int, std::string> request_msg_strings;
   std::unordered_map<int, Client_handle> waiting_clients;
   std::unordered_map<std::string, Response_msg> cached_responses;
   std::unordered_map<int, Crequest*> compareprimes_requests;
@@ -39,7 +45,6 @@ static void create_computeprimes_req(Request_msg& req, int n) {
   req.set_arg("n", oss.str());
 }
 
-
 void master_node_init(int max_workers, int& tick_period) {
 
   // set up tick handler to fire every 5 seconds. (feel free to
@@ -47,6 +52,8 @@ void master_node_init(int max_workers, int& tick_period) {
   tick_period = 5;
 
   mstate.next_tag = 0;
+  mstate.active_worker_num = 0;
+  mstate.pending_worker_num = 0;
   mstate.max_num_workers = max_workers;
   mstate.num_pending_client_requests = 0;
 
@@ -62,6 +69,8 @@ void master_node_init(int max_workers, int& tick_period) {
   req.set_arg("name", "my worker 0");
   request_new_worker_node(req);
 
+  // increase number of pending worker
+  mstate.pending_worker_num++;
 }
 
 void handle_new_worker_online(Worker_handle worker_handle, int tag) {
@@ -69,8 +78,14 @@ void handle_new_worker_online(Worker_handle worker_handle, int tag) {
   // 'tag' allows you to identify which worker request this response
   // corresponds to.  Since the starter code only sends off one new
   // worker request, we don't use it here.
+  // decrease pending worker num
 
-  mstate.my_worker = worker_handle;
+  mstate.pending_worker_num--;
+
+  // register new worker
+  Wstate* p = &(mstate.my_workers[mstate.active_worker_num++]);
+  p->request_count = 0;
+  p->worker_handle = worker_handle;
 
   // Now that a worker is booted, let the system know the server is
   // ready to begin handling client requests.  The test harness will
@@ -185,6 +200,7 @@ void handle_client_request(Client_handle client_handle, const Request_msg& clien
         resp.set_response("There are more primes in second range.");
 
       send_client_response(client_handle, resp);
+      delete crequest;
     } else { // wait
       // save client_handle and wait
       mstate.waiting_clients[crequest->first_tag] = client_handle;
@@ -208,7 +224,7 @@ void handle_client_request(Client_handle client_handle, const Request_msg& clien
     // respond, and your 'handle_worker_response' event handler will be
     // called to forward the worker's response back to the server.
     Request_msg worker_req(tag, client_req);
-    send_request_to_worker(mstate.my_worker, worker_req);
+    send_request_to_worker(mstate.my_workers[0].worker_handle, worker_req);
   }
 
   // We're done!  This event handler now returns, and the master
