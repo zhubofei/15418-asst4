@@ -89,9 +89,9 @@ void handle_new_worker_online(Worker_handle worker_handle, int tag) {
   mstate.my_workers[worker_handle] = 0;
 
   // empty holding queue
-  while(mstat.holding_requests.size() > 0) {
-    send_request_to_worker(worker_handle, mstat.holding_requests.front());
-    mstat.holding_requests.pop();
+  while(mstate.holding_requests.size() > 0) {
+    send_request_to_worker(worker_handle, mstate.holding_requests.front());
+    mstate.holding_requests.pop();
   }
 
   // Now that a worker is booted, let the system know the server is
@@ -293,7 +293,7 @@ void assign_request(const Request_msg& req) {
     w->second++;
   } else {
     // if workers' number is at max
-    if (mstat.my_workers.size() == mstat.max_num_workers) {
+    if (mstate.my_workers.size() == mstate.max_num_workers) {
       // fire request
       send_request_to_best_worker(req);
     } else {
@@ -302,13 +302,13 @@ void assign_request(const Request_msg& req) {
       // have avalible workers
       if (idle_count > 0) {
         // check if there is request in the holding queue
-        if (mstat.holding_requests.size() > 0) {
+        if (mstate.holding_requests.size() > 0) {
           // push the request into the back of the queue
-          mstat.holding_requests.push(req);
-          while(idle_count > 0 && mstat.holding_requests.size() > 0) {
+          mstate.holding_requests.push(req);
+          while(idle_count > 0 && mstate.holding_requests.size() > 0) {
             // send queued reqs
-            send_request_to_best_worker(mstat.holding_requests.front());
-            mstat.holding_requests.pop();
+            send_request_to_best_worker(mstate.holding_requests.front());
+            mstate.holding_requests.pop();
             idle_count--;
           }
         } else {
@@ -318,7 +318,7 @@ void assign_request(const Request_msg& req) {
       } else {
         // !!!!! if overload too much should allow init more than one worker
         // fire off a request for a new worker
-        if (mstat.pending_worker_num == 0) { // init a new worker
+        if (mstate.pending_worker_num == 0) { // init a new worker
           int tag = random();
           Request_msg req(tag);
           req.set_arg("name", "my worker 0");
@@ -330,13 +330,13 @@ void assign_request(const Request_msg& req) {
         int avalible_queue = count_avalible_queue();
         if (avalible_queue > 0) {
           // check if there is request in the holding queue
-          if (mstat.holding_requests.size() > 0) {
+          if (mstate.holding_requests.size() > 0) {
             // push the request into the back of the queue
-            mstat.holding_requests.push(req);
-            while(avalible_queue > 0 && mstat.holding_requests.size() > 0) {
+            mstate.holding_requests.push(req);
+            while(avalible_queue > 0 && mstate.holding_requests.size() > 0) {
               // send queued reqs
-              send_request_to_best_worker(mstat.holding_requests.front());
-              mstat.holding_requests.pop();
+              send_request_to_best_worker(mstate.holding_requests.front());
+              mstate.holding_requests.pop();
               avalible_queue--;
             }
           } else {
@@ -344,11 +344,11 @@ void assign_request(const Request_msg& req) {
             send_request_to_best_worker(req);
           }
         } else { // workers are all overload
-          mstat.holding_requests.push(req); // cache the request in queue
-          if (mstat.holding_requests.size() > MAX_QUEUE_LENGTH) {
+          mstate.holding_requests.push(req); // cache the request in queue
+          if (mstate.holding_requests.size() > MAX_QUEUE_LENGTH) {
             // queue too long
-            send_request_to_best_worker(mstat.holding_requests.front());
-            mstat.holding_requests.pop();
+            send_request_to_best_worker(mstate.holding_requests.front());
+            mstate.holding_requests.pop();
           }
         }
       }
@@ -363,7 +363,7 @@ void handle_tick() {
   // according to how you set 'tick_period' in 'master_node_init'.
 
   // kill idle workers
-  if (mstat.my_workers.size() > 1) {
+  if (mstate.my_workers.size() > 1) {
     for (auto& w: mstate.my_workers) {
       if (w.second == 0) {
         kill_worker_node(w.first);
