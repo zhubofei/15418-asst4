@@ -3,20 +3,18 @@
 #include <stdlib.h>
 #include <unordered_map>
 #include <sstream>
+#include <queue>
 
 #include "server/messages.h"
 #include "server/master.h"
+
+#define MAX_THREADS 23
 
 typedef struct {
   int first_tag;
   int finished_count;
   int n[4];
 } Crequest;
-
-typedef struct {
-  Worker_handle worker_handle;
-  int request_count;
-} Wstate;
 
 static struct Master_state {
 
@@ -28,9 +26,11 @@ static struct Master_state {
   int max_num_workers;
   int num_pending_client_requests;
   int next_tag;
-  int active_worker_num;
   int pending_worker_num;
-  Wstate my_workers[4];
+
+  std::queue<Request_msg> holding_requests;
+  // count of pending requests
+  std::unordered_map<Worker_handle, int> my_workers;
   std::unordered_map<int, std::string> request_msg_strings;
   std::unordered_map<int, Client_handle> waiting_clients;
   std::unordered_map<std::string, Response_msg> cached_responses;
@@ -45,6 +45,10 @@ static void create_computeprimes_req(Request_msg& req, int n) {
   req.set_arg("n", oss.str());
 }
 
+void assign_request(const Request_msg&);
+
+// -----------------------------------------------------------------------
+
 void master_node_init(int max_workers, int& tick_period) {
 
   // set up tick handler to fire every 5 seconds. (feel free to
@@ -52,7 +56,6 @@ void master_node_init(int max_workers, int& tick_period) {
   tick_period = 5;
 
   mstate.next_tag = 0;
-  mstate.active_worker_num = 0;
   mstate.pending_worker_num = 0;
   mstate.max_num_workers = max_workers;
   mstate.num_pending_client_requests = 0;
@@ -79,13 +82,10 @@ void handle_new_worker_online(Worker_handle worker_handle, int tag) {
   // corresponds to.  Since the starter code only sends off one new
   // worker request, we don't use it here.
   // decrease pending worker num
-
   mstate.pending_worker_num--;
 
   // register new worker
-  Wstate* p = &(mstate.my_workers[mstate.active_worker_num++]);
-  p->request_count = 0;
-  p->worker_handle = worker_handle;
+  mstate.my_workers[worker_handle] = 0;
 
   // Now that a worker is booted, let the system know the server is
   // ready to begin handling client requests.  The test harness will
@@ -99,8 +99,7 @@ void handle_new_worker_online(Worker_handle worker_handle, int tag) {
 void handle_worker_response(Worker_handle worker_handle, const Response_msg& resp) {
 
   // Master node has received a response from one of its workers.
-  // Here we directly return this response to the client.
-
+  mstate.my_workers[worker_handle]--;
   if (mstate.compareprimes_requests.count(resp.get_tag())) {
     Crequest* crequest = mstate.compareprimes_requests[resp.get_tag()];
     crequest->finished_count++;
@@ -184,7 +183,7 @@ void handle_client_request(Client_handle client_handle, const Request_msg& clien
         // save request to the map
         mstate.compareprimes_requests[tag] = crequest;
         // send request
-        send_request_to_worker(mstate.my_workers[0].worker_handle, dummy_req);
+        assign_request(dummy_req);
         // increase num of pennding request
         mstate.num_pending_client_requests++;
       }
@@ -224,12 +223,21 @@ void handle_client_request(Client_handle client_handle, const Request_msg& clien
     // respond, and your 'handle_worker_response' event handler will be
     // called to forward the worker's response back to the server.
     Request_msg worker_req(tag, client_req);
-    send_request_to_worker(mstate.my_workers[0].worker_handle, worker_req);
+    assign_request(worker_req);
+
   }
 
   // We're done!  This event handler now returns, and the master
   // process calls another one of your handlers when action is
   // required.
+}
+
+void assign_request(const Request_msg& req) {
+  for (auto& w: mstate.my_workers) {
+    send_request_to_worker(w.first, req);
+    w.second++;
+    break;
+  }
 }
 
 
