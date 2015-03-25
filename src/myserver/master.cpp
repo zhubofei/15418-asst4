@@ -270,7 +270,7 @@ void send_request_to_best_worker(const Request_msg& req) {
     mstate.my_workers[worker_handle]++;
   } else { // there is no idle threads
     // send request to the least busy worker
-    Worker_handle woker_handle;
+    Worker_handle worker_handle;
     int t_num = 999999; // big number
     for (auto& w: mstate.my_workers) {
       if (w.second < t_num) {
