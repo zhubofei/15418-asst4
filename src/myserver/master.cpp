@@ -26,7 +26,7 @@ static struct Master_state {
   // exist only to implement the basic functionality of the starter
   // code.
   bool server_ready;
-  int max_num_workers;
+  unsigned int max_num_workers;
   int next_tag;
   int pending_worker_num;
 
