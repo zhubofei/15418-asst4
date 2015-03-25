@@ -233,11 +233,14 @@ void handle_client_request(Client_handle client_handle, const Request_msg& clien
 }
 
 void assign_request(const Request_msg& req) {
-  for (auto& w: mstate.my_workers) {
+  auto w = --mstate.my_workers.end();
+  send_request_to_worker(w.first, req);
+  w.second++;
+  /*for (auto& w: mstate.my_workers) {
     send_request_to_worker(w.first, req);
     w.second++;
     break;
-  }
+  }*/
 }
 
 
