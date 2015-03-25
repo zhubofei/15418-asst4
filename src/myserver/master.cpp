@@ -157,7 +157,7 @@ void handle_client_request(Client_handle client_handle, const Request_msg& clien
       create_computeprimes_req(dummy_req, params[i]);
 
       // check cache
-      if (false) {//mstate.cached_responses.count(dummy_req.get_request_string())) {
+      if (mstate.cached_responses.count(dummy_req.get_request_string())) {
         Response_msg resp(tag);
         // update crequest
         resp.set_response(mstate.cached_responses[dummy_req.get_request_string()].get_response());
@@ -176,7 +176,7 @@ void handle_client_request(Client_handle client_handle, const Request_msg& clien
     }
 
     // if all parts are completed, create response
-    if (false) {//crequest->finished_count == 4) {
+    if (crequest->finished_count == 4) {
       Response_msg resp(crequest->first_tag);
 
       if (crequest->n[1] - crequest->n[0] > crequest->n[3] - crequest->n[2])
