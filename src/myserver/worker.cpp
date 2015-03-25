@@ -99,6 +99,7 @@ void worker_node_init(const Request_msg& params) {
     pthread_t t;
     pthread_create(&t, NULL, &worker_thread, NULL);
   }
+  // leave one high way for tellmenow
   pthread_t t;
   pthread_create(&t, NULL, &tell_thread, NULL);
 }
