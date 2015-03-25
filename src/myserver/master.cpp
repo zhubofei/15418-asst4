@@ -235,8 +235,8 @@ void handle_client_request(Client_handle client_handle, const Request_msg& clien
 
 void assign_request(const Request_msg& req) {
   auto w = mstate.my_workers.begin();
-  send_request_to_worker(w.first, req);
-  w.second++;
+  send_request_to_worker(w->first, req);
+  w->second++;
   /*for (auto& w: mstate.my_workers) {
     send_request_to_worker(w.first, req);
     w.second++;
