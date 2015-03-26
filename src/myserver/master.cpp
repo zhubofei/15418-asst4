@@ -19,6 +19,11 @@ typedef struct {
   int n[4];
 } Crequest;
 
+typedef struct {
+  int request_num;
+  bool pending_projectidea;
+} Wstate;
+
 static struct Master_state {
 
   // The mstate struct collects all the master node state into one
@@ -32,11 +37,10 @@ static struct Master_state {
 
   // queue of holding requests
   std::queue<Request_msg> holding_requests;
-
   std::queue<Request_msg> projectidea_requests;
 
   // count of pending requests
-  std::unordered_map<Worker_handle, int> my_workers;
+  std::unordered_map<Worker_handle, Wstate> my_workers;
   std::unordered_map<int, Request_msg> request_msgs;
   std::unordered_map<int, Client_handle> waiting_clients;
   std::unordered_map<std::string, Response_msg> cached_responses;
@@ -88,12 +92,13 @@ void handle_new_worker_online(Worker_handle worker_handle, int tag) {
   mstate.pending_worker_num--;
 
   // register new worker
-  mstate.my_workers[worker_handle] = 0;
+  mstate.my_workers[worker_handle].request_num = 0;
+  mstate.my_workers[worker_handle].pending_projectidea = false;
 
   // empty holding queue
   while(mstate.holding_requests.size() > 0) {
     send_request_to_worker(worker_handle, mstate.holding_requests.front());
-    mstate.my_workers[worker_handle]++;
+    mstate.my_workers[worker_handle].request_num++;
     mstate.holding_requests.pop();
   }
 
@@ -109,7 +114,11 @@ void handle_new_worker_online(Worker_handle worker_handle, int tag) {
 void handle_worker_response(Worker_handle worker_handle, const Response_msg& resp) {
 
   // Master node has received a response from one of its workers.
-  mstate.my_workers[worker_handle]--;
+  mstate.my_workers[worker_handle].request_num--;
+
+  if (mstate.request_msgs[resp.get_tag()].get_arg("cmd") == "projectidea") {
+    mstate.my_workers[worker_handle].pending_projectidea = false;
+  }
 
   if (mstate.compareprimes_requests.count(resp.get_tag())) {
     Crequest* crequest = mstate.compareprimes_requests[resp.get_tag()];
@@ -240,8 +249,8 @@ void handle_client_request(Client_handle client_handle, const Request_msg& clien
 int count_idle_threads() {
   int count = 0;
   for (auto& w: mstate.my_workers) {
-    if (w.second < MAX_THREADS) {
-      count += MAX_THREADS - w.second;
+    if (w.second.request_num < MAX_THREADS) {
+      count += MAX_THREADS - w.second.request_num;
     }
   }
   return count;
@@ -250,8 +259,8 @@ int count_idle_threads() {
 int count_avalible_queue() {
   int count = 0;
   for (auto& w: mstate.my_workers) {
-    if (w.second < MAX_REQUESTS) {
-      count += MAX_REQUESTS - w.second;
+    if (w.second.request_num < MAX_REQUESTS) {
+      count += MAX_REQUESTS - w.second.request_num;
     }
   }
   return count;
@@ -263,27 +272,27 @@ void send_request_to_best_worker(const Request_msg& req) {
     Worker_handle worker_handle = mstate.my_workers.begin()->first;
     int t_num = 0;
     for (auto& w: mstate.my_workers) {
-      if (w.second < MAX_THREADS && t_num < w.second) {
+      if (w.second.request_num < MAX_THREADS && t_num < w.second) {
         // send request to the worker with least idle threads
         worker_handle = w.first;
-        t_num = w.second;
+        t_num = w.second.request_num;
       }
     }
     send_request_to_worker(worker_handle, req);
-    mstate.my_workers[worker_handle]++;
+    mstate.my_workers[worker_handle].request_num++;
   } else { // there is no idle threads
     // send request to the least busy worker
     Worker_handle worker_handle = mstate.my_workers.begin()->first;
     int t_num = 999999; // big number
     for (auto& w: mstate.my_workers) {
-      if (w.second < t_num) {
+      if (w.second.request_num < t_num) {
         // send request to the worker with least idle threads
         worker_handle = w.first;
-        t_num = w.second;
+        t_num = w.second.request_num;
       }
     }
     send_request_to_worker(worker_handle, req);
-    mstate.my_workers[worker_handle]++;
+    mstate.my_workers[worker_handle].request_num++;
   }
 }
 
@@ -291,7 +300,7 @@ void assign_request(const Request_msg& req) {
   if (req.get_arg("cmd") == "tellmenow") { // fire instantly
     auto w = mstate.my_workers.begin();
     send_request_to_worker(w->first, req);
-    w->second++;
+    w->second.request_num++;
   } else if (req.get_arg("cmd") == "projectidea"){
     mstate.projectidea_requests.push(req);
   } else {
@@ -366,11 +375,10 @@ void handle_tick() {
   // according to how you set 'tick_period' in 'master_node_init'.
 
 
-
   // kill idle workers
   if (mstate.my_workers.size() > 1) {
     for (auto& w: mstate.my_workers) {
-      if (w.second == 0) {
+      if (w.second.request_num == 0) {
         kill_worker_node(w.first);
         Worker_handle wh = w.first;
         mstate.my_workers.erase(wh);
