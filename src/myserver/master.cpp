@@ -368,6 +368,7 @@ void handle_tick() {
         kill_worker_node(w.first);
         Worker_handle wh = w.first;
         mstate.my_workers.erase(wh);
+        break;
       }
     }
   }
