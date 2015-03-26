@@ -33,9 +33,11 @@ static struct Master_state {
   // queue of holding requests
   std::queue<Request_msg> holding_requests;
 
+  std::queue<Request_msg> projectidea_requests;
+
   // count of pending requests
   std::unordered_map<Worker_handle, int> my_workers;
-  std::unordered_map<int, std::string> request_msg_strings;
+  std::unordered_map<int, Request_msg> request_msgs;
   std::unordered_map<int, Client_handle> waiting_clients;
   std::unordered_map<std::string, Response_msg> cached_responses;
   std::unordered_map<int, Crequest*> compareprimes_requests;
@@ -114,7 +116,7 @@ void handle_worker_response(Worker_handle worker_handle, const Response_msg& res
     crequest->finished_count++;
     crequest->n[resp.get_tag() - crequest->first_tag] = atoi(resp.get_response().c_str());
     mstate.compareprimes_requests.erase(resp.get_tag());
-    mstate.cached_responses[mstate.request_msg_strings[resp.get_tag()]] = resp;
+    mstate.cached_responses[mstate.request_msgs[resp.get_tag()].get_request_string()] = resp;
 
     // if dummy requests all finished, send respond
     if (crequest->finished_count == 4) {
@@ -128,13 +130,13 @@ void handle_worker_response(Worker_handle worker_handle, const Response_msg& res
       mstate.waiting_clients.erase(crequest->first_tag);
       delete crequest;
     }
-    mstate.request_msg_strings.erase(resp.get_tag());
+    mstate.request_msgs.erase(resp.get_tag());
   } else {
     send_client_response(mstate.waiting_clients[resp.get_tag()], resp);
     // cache
-    mstate.cached_responses[mstate.request_msg_strings[resp.get_tag()]] = resp;
+    mstate.cached_responses[mstate.request_msgs[resp.get_tag()].get_request_string()] = resp;
     // delete
-    mstate.request_msg_strings.erase(resp.get_tag());
+    mstate.request_msgs.erase(resp.get_tag());
     mstate.waiting_clients.erase(resp.get_tag());
   }
 }
@@ -186,7 +188,7 @@ void handle_client_request(Client_handle client_handle, const Request_msg& clien
         crequest->n[i] = atoi(resp.get_response().c_str());
       } else {
         // save requst string to the map
-        mstate.request_msg_strings[tag] = dummy_req.get_request_string();
+        mstate.request_msgs[tag] = dummy_req;
         // save request to the map
         mstate.compareprimes_requests[tag] = crequest;
         // send request
@@ -221,7 +223,7 @@ void handle_client_request(Client_handle client_handle, const Request_msg& clien
     // The master needs to do this it can response to this client later
     // when 'handle_worker_response' is called.
     mstate.waiting_clients[tag] = client_handle;
-    mstate.request_msg_strings[tag] = client_req.get_request_string();
+    mstate.request_msgs[tag] = client_req;
 
     // Fire off the request to the worker.  Eventually the worker will
     // respond, and your 'handle_worker_response' event handler will be
@@ -290,6 +292,8 @@ void assign_request(const Request_msg& req) {
     auto w = mstate.my_workers.begin();
     send_request_to_worker(w->first, req);
     w->second++;
+  } else if (req.get_arg("cmd") == "projectidea"){
+    mstate.projectidea_requests.push(req);
   } else {
     // if workers' number is at max
     if (mstate.my_workers.size() == mstate.max_num_workers) {
@@ -360,6 +364,8 @@ void handle_tick() {
 
   // This method is called at fixed time intervals,
   // according to how you set 'tick_period' in 'master_node_init'.
+
+
 
   // kill idle workers
   if (mstate.my_workers.size() > 1) {
