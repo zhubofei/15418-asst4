@@ -91,6 +91,7 @@ void handle_new_worker_online(Worker_handle worker_handle, int tag) {
   // empty holding queue
   while(mstate.holding_requests.size() > 0) {
     send_request_to_worker(worker_handle, mstate.holding_requests.front());
+    mstate.my_workers[worker_handle]++;
     mstate.holding_requests.pop();
   }
 
