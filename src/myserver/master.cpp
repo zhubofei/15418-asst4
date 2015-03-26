@@ -63,7 +63,7 @@ void master_node_init(int max_workers, int& tick_period) {
 
   // set up tick handler to fire every 5 seconds. (feel free to
   // configure as you please)
-  tick_period = 5;
+  tick_period = 1;
 
   mstate.next_tag = 0;
   mstate.pending_worker_num = 0;
@@ -303,6 +303,16 @@ void assign_request(const Request_msg& req) {
     w->second.request_num++;
   } else if (req.get_arg("cmd") == "projectidea"){
     mstate.projectidea_requests.push(req);
+    if (mstate.projectidea_requests.size() > 3
+        && mstate.my_workers.size() < mstate.max_num_workers
+        && mstate.pending_worker_num == 0) {
+      int tag = random();
+      Request_msg req(tag);
+      req.set_arg("name", "my worker 0");
+      request_new_worker_node(req);
+      // increase number of pending worker
+      mstate.pending_worker_num++;
+    }
   } else {
     // if workers' number is at max
     if (mstate.my_workers.size() == mstate.max_num_workers) {
@@ -374,6 +384,16 @@ void handle_tick() {
   // This method is called at fixed time intervals,
   // according to how you set 'tick_period' in 'master_node_init'.
 
+  // send projectidea requests
+  for (auto& w: mstate.my_workers) {
+    if (!w.second.pending_projectidea && mstate.projectidea_requests.size() > 0) {
+      Worker_handle worker_handle = w.first;
+      send_request_to_worker(worker_handle, mstate.projectidea_requests.front());
+      mstate.projectidea_requests.pop();
+      w.second.pending_projectidea = true;
+      w.second.request_num++;
+    }
+  }
 
   // kill idle workers
   if (mstate.my_workers.size() > 1) {
