@@ -272,7 +272,7 @@ void send_request_to_best_worker(const Request_msg& req) {
     Worker_handle worker_handle = mstate.my_workers.begin()->first;
     int t_num = 0;
     for (auto& w: mstate.my_workers) {
-      if (w.second.request_num < MAX_THREADS && t_num < w.second) {
+      if (w.second.request_num < MAX_THREADS && t_num < w.second.request_num) {
         // send request to the worker with least idle threads
         worker_handle = w.first;
         t_num = w.second.request_num;
