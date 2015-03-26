@@ -4,6 +4,7 @@
 #include <unordered_map>
 #include <sstream>
 #include <queue>
+#include <stack>
 #include <iterator>
 
 #include "server/messages.h"
@@ -37,7 +38,7 @@ static struct Master_state {
 
   // queue of holding requests
   std::queue<Request_msg> holding_requests;
-  std::queue<Request_msg> projectidea_requests;
+  std::stack<Request_msg> projectidea_requests;
 
   // count of pending requests
   std::unordered_map<Worker_handle, Wstate> my_workers;
@@ -388,7 +389,7 @@ void handle_tick() {
   for (auto& w: mstate.my_workers) {
     if (!w.second.pending_projectidea && mstate.projectidea_requests.size() > 0) {
       Worker_handle worker_handle = w.first;
-      send_request_to_worker(worker_handle, mstate.projectidea_requests.front());
+      send_request_to_worker(worker_handle, mstate.projectidea_requests.top());
       mstate.projectidea_requests.pop();
       w.second.pending_projectidea = true;
       w.second.request_num++;
