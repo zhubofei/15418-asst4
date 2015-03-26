@@ -13,6 +13,7 @@
 #define MAX_REQUESTS 27
 #define MAX_THREADS 23
 #define MAX_QUEUE_LENGTH 25
+#define BIG_INT 999999
 
 typedef struct {
   int first_tag;
@@ -284,7 +285,7 @@ void send_request_to_best_worker(const Request_msg& req) {
   } else { // there is no idle threads
     // send request to the least busy worker
     Worker_handle worker_handle = mstate.my_workers.begin()->first;
-    int t_num = 999999; // big number
+    int t_num = BIG_INT; // big number
     for (auto& w: mstate.my_workers) {
       if (w.second.request_num < t_num) {
         // send request to the worker with least idle threads
@@ -297,15 +298,34 @@ void send_request_to_best_worker(const Request_msg& req) {
   }
 }
 
-void send_projectidea() {
+int count_no_projectidea() {
+  // count the number of workers that are not running projectidea
+  int count = 0;
   for (auto& w: mstate.my_workers) {
-    if (!w.second.pending_projectidea && mstate.projectidea_requests.size() > 0) {
-      Worker_handle worker_handle = w.first;
-      send_request_to_worker(worker_handle, mstate.projectidea_requests.top());
-      mstate.projectidea_requests.pop();
-      w.second.pending_projectidea = true;
-      w.second.request_num++;
+    if (!w.second.pending_projectidea) {
+      count++;
     }
+  }
+  return count;
+}
+
+void send_projectidea() {
+  int count = count_no_projectidea();
+  while (count > 0 && mstate.projectidea_requests.size() > 0) {
+    count--;
+    int t_num = BIG_INT; // big number
+    Worker_handle worker_handle = mstate.my_workers.begin()->first;
+    // find the least busy worker
+    for (auto& w: mstate.my_workers) {
+      if (!w.second.pending_projectidea && w.second.request_num < t_num) {
+        worker_handle = w.first;
+        t_num = w.second.request_num;
+      }
+    }
+    send_request_to_worker(worker_handle, mstate.projectidea_requests.top());
+    mstate.projectidea_requests.pop();
+    mstate.my_workers[worker_handle].request_num++;
+    mstate.my_workers[worker_handle].pending_projectidea = true;
   }
 }
 
