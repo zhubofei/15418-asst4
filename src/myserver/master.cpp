@@ -297,6 +297,18 @@ void send_request_to_best_worker(const Request_msg& req) {
   }
 }
 
+void send_projectidea() {
+  for (auto& w: mstate.my_workers) {
+    if (!w.second.pending_projectidea && mstate.projectidea_requests.size() > 0) {
+      Worker_handle worker_handle = w.first;
+      send_request_to_worker(worker_handle, mstate.projectidea_requests.top());
+      mstate.projectidea_requests.pop();
+      w.second.pending_projectidea = true;
+      w.second.request_num++;
+    }
+  }
+}
+
 void assign_request(const Request_msg& req) {
   if (req.get_arg("cmd") == "tellmenow") { // fire instantly
     auto w = mstate.my_workers.begin();
@@ -304,6 +316,7 @@ void assign_request(const Request_msg& req) {
     w->second.request_num++;
   } else if (req.get_arg("cmd") == "projectidea"){
     mstate.projectidea_requests.push(req);
+    send_projectidea();
     if (mstate.projectidea_requests.size() > 3
         && mstate.my_workers.size() < mstate.max_num_workers
         && mstate.pending_worker_num == 0) {
@@ -379,22 +392,13 @@ void assign_request(const Request_msg& req) {
   }
 }
 
-
 void handle_tick() {
 
   // This method is called at fixed time intervals,
   // according to how you set 'tick_period' in 'master_node_init'.
 
   // send projectidea requests
-  for (auto& w: mstate.my_workers) {
-    if (!w.second.pending_projectidea && mstate.projectidea_requests.size() > 0) {
-      Worker_handle worker_handle = w.first;
-      send_request_to_worker(worker_handle, mstate.projectidea_requests.top());
-      mstate.projectidea_requests.pop();
-      w.second.pending_projectidea = true;
-      w.second.request_num++;
-    }
-  }
+  send_projectidea();
 
   // kill idle workers
   if (mstate.my_workers.size() > 1) {
