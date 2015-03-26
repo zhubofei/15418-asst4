@@ -365,6 +365,8 @@ void handle_tick() {
     for (auto& w: mstate.my_workers) {
       if (w.second == 0) {
         kill_worker_node(w.first);
+        Worker_handle wh = w.first;
+        mstate.my_workers.erase(wh);
       }
     }
   }
