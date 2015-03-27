@@ -46,7 +46,7 @@ int main(int argc, char** argv) {
 
   DLOG_IF(INFO, FLAGS_log_network) << "Waiting for launcher " << argv[1];
   while (launcher_fd < 0) {
-    sleep(100);
+    sleep(1);
     launcher_fd = connect_to(argv[1]);
   }
   DLOG_IF(INFO, FLAGS_log_network) << "Connected to launcher at " << argv[1];
